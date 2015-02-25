@@ -18,6 +18,87 @@ from .settings import get_setting
 User = get_user_model()
 
 
+class AjaxListMixin(object):
+    """
+    A subclass of *django.views.generic.ListView* that allows AJAX
+    pagination of a list of objects.
+
+    You can use this class based view in place of *ListView* in order to
+    recreate the behaviour of the *page_template* decorator.
+
+    For instance, assume you have this code (taken from Django docs)::
+
+        from django.conf.urls.defaults import *
+        from django.views.generic import ListView
+        from books.models import Publisher
+
+        urlpatterns = patterns('',
+            (r'^publishers/$', ListView.as_view(model=Publisher)),
+        )
+
+    You want to AJAX paginate publishers, so, as seen, you need to switch
+    the template if the request is AJAX and put the page template
+    into the context as a variable named *page_template*.
+
+    This is straightforward, you only need to replace the view class, e.g.::
+
+        from django.conf.urls.defaults import *
+        from books.models import Publisher
+
+        from endless_pagination.views import AjaxListView
+
+        urlpatterns = patterns('',
+            (r'^publishers/$', AjaxListView.as_view(model=Publisher)),
+        )
+
+    NOTE: Django >= 1.3 is required to use this view.
+    """
+    key = "page"
+    page_template = None
+    page_template_suffix = '_page'
+
+    def get_page_template(self, **kwargs):
+        """
+        Only called if *page_template* is not given as a kwarg of
+        *self.as_view*.
+        """
+        opts = self.object_list.model._meta
+        return "%s/%s%s%s.html" % (opts.app_label, opts.object_name.lower(),
+                                   self.template_name_suffix, self.page_template_suffix)
+
+    def get_context_data(self, **kwargs):
+        """
+        Adds the *page_template* variable in the context.
+
+        If the *page_template* is not given as a kwarg of the *as_view*
+        method then it is invented using app label, model name
+        (obviously if the list is a queryset), *self.template_name_suffix*
+        and *self.page_template_suffix*.
+
+        For instance, if the list is a queryset of *blog.Entry*,
+        the template will be *blog/entry_list_page.html*.
+        """
+        context = super(AjaxListMixin, self).get_context_data(**kwargs)
+        if self.page_template is None:
+            if hasattr(self.object_list, 'model'):
+                self.page_template = self.get_page_template(**kwargs)
+            else:
+                raise ImproperlyConfigured(
+                    'AjaxListMixin requires a page_template')
+        context['page_template'] = self.page_template
+        return context
+
+    def get_template_names(self):
+        """
+        Switch the templates for AJAX requests.
+        """
+        request = self.request
+        querystring_key = request.REQUEST.get("querystring_key", self.key)
+        if request.is_ajax() and querystring_key == self.key:
+            return [self.page_template]
+        return super(AjaxListMixin, self).get_template_names()
+
+
 class BaseBlogView(AppConfigMixin, ViewUrlMixin):
 
     def get_view_url(self):
@@ -51,7 +132,7 @@ class BaseBlogView(AppConfigMixin, ViewUrlMixin):
         return os.path.join(template_path, self.base_template_name)
 
 
-class PostListView(BaseBlogView, ListView):
+class PostListView(AjaxListMixin, BaseBlogView, ListView):
     model = Post
     context_object_name = 'post_list'
     base_template_name = 'post_list.html'
@@ -93,7 +174,7 @@ class PostDetailView(TranslatableSlugMixin, BaseBlogView, DetailView):
         return context
 
 
-class PostArchiveView(BaseBlogView, ListView):
+class PostArchiveView(AjaxListMixin, BaseBlogView, ListView):
     model = Post
     context_object_name = 'post_list'
     base_template_name = 'post_list.html'
@@ -121,7 +202,7 @@ class PostArchiveView(BaseBlogView, ListView):
         return context
 
 
-class TaggedListView(BaseBlogView, ListView):
+class TaggedListView(AjaxListMixin, BaseBlogView, ListView):
     model = Post
     context_object_name = 'post_list'
     base_template_name = 'post_list.html'
@@ -133,6 +214,9 @@ class TaggedListView(BaseBlogView, ListView):
         return qs.filter(tags__slug=self.kwargs['tag'])
 
     def get_context_data(self, **kwargs):
+        if 'tag' in self.kwargs:
+            tag_obj = Tag.objects.get(slug=self.kwargs['tag'])
+            kwargs['tag'] = tag_obj
         kwargs['tagged_entries'] = (self.kwargs.get('tag')
                                     if 'tag' in self.kwargs else None)
         context = super(TaggedListView, self).get_context_data(**kwargs)
@@ -140,7 +224,7 @@ class TaggedListView(BaseBlogView, ListView):
         return context
 
 
-class AuthorEntriesView(BaseBlogView, ListView):
+class AuthorEntriesView(AjaxListMixin, BaseBlogView, ListView):
     model = Post
     context_object_name = 'post_list'
     base_template_name = 'post_list.html'
@@ -160,7 +244,7 @@ class AuthorEntriesView(BaseBlogView, ListView):
         return context
 
 
-class CategoryEntriesView(BaseBlogView, ListView):
+class CategoryEntriesView(AjaxListMixin, BaseBlogView, ListView):
     model = Post
     context_object_name = 'post_list'
     base_template_name = 'post_list.html'
@@ -193,3 +277,4 @@ class CategoryEntriesView(BaseBlogView, ListView):
         context = super(CategoryEntriesView, self).get_context_data(**kwargs)
         context['TRUNCWORDS_COUNT'] = get_setting('POSTS_LIST_TRUNCWORDS_COUNT')
         return context
+
