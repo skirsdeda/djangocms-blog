@@ -214,9 +214,6 @@ class TaggedListView(AjaxListMixin, BaseBlogView, ListView):
         return qs.filter(tags__slug=self.kwargs['tag'])
 
     def get_context_data(self, **kwargs):
-        if 'tag' in self.kwargs:
-            tag_obj = Tag.objects.get(slug=self.kwargs['tag'])
-            kwargs['tag'] = tag_obj
         kwargs['tagged_entries'] = (self.kwargs.get('tag')
                                     if 'tag' in self.kwargs else None)
         context = super(TaggedListView, self).get_context_data(**kwargs)
