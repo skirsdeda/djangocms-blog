@@ -16,6 +16,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='posttranslation',
             name='slug',
-            field=djangocms_blog.fields.AutoSlugField(allow_unicode=True, blank=True, max_length=767, verbose_name='slug'),
+            field=djangocms_blog.fields.AutoSlugField(allow_unicode=False, blank=True, max_length=767, verbose_name='slug'),
         ),
     ]
