@@ -16,7 +16,4 @@ class AutoSlugField(SlugField):
 
 
 def slugify(base):
-    if django.VERSION >= (1, 9):
-        return django_slugify(base, allow_unicode=True)
-    else:
-        return django_slugify(base)
+    return django_slugify(base)
